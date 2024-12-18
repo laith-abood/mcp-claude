@@ -49,19 +49,38 @@ git push -u origin my-changes
 
 ### Keeping in Sync with Upstream
 
-1. Update main branch from upstream:
+Your fork does NOT automatically sync with the original repository. You need to manually check for and pull updates:
+
+1. Check for new updates from upstream:
+```bash
+git fetch upstream
+git log HEAD..upstream/main --oneline  # Shows what updates are available
+```
+
+2. If there are updates, sync your main branch:
 ```bash
 git checkout main
 git pull  # Pulls from upstream/main automatically
 git push origin main  # Updates your fork's main branch
 ```
 
-2. Update your changes branch (if needed):
+3. Update your changes branch (if needed):
 ```bash
 git checkout my-changes
 git rebase main  # Incorporates upstream changes into your branch
 git push --force-with-lease  # Only needed if you rebased
 ```
+
+It's recommended to check for updates regularly (e.g., daily or weekly) to stay current with the original repository.
+
+### Automatic Update Notifications
+
+To get notifications about upstream changes:
+1. Go to the original repository on GitHub (https://github.com/modelcontextprotocol/servers)
+2. Click "Watch" at the top
+3. Select "Custom" -> "Releases" and "Pull requests"
+
+This way, GitHub will notify you when there are significant changes in the original repository.
 
 ### Working on Changes
 

@@ -12,6 +12,13 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import OpenAI from "openai";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
+import {
+    CodeReviewPrompt,
+    CODE_REVIEW_PROMPTS,
+    selectModelForReview,
+    formatReviewRequest,
+    CodeReviewResult
+} from "./code-review-prompts.js";
 
 // Initialize OpenAI client
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -31,6 +38,40 @@ type SupportedModel = typeof SUPPORTED_MODELS[number];
 
 // Define available tools
 const TOOLS: Tool[] = [
+    {
+        name: "code_review",
+        description: "Perform specialized code review using OpenAI models. Supports different types of reviews including security, performance, quality, and more.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                code: {
+                    type: "string",
+                    description: "The code to review"
+                },
+                reviewType: {
+                    type: "string",
+                    enum: Object.keys(CODE_REVIEW_PROMPTS),
+                    description: "Type of review to perform"
+                },
+                fileExtension: {
+                    type: "string",
+                    description: "File extension (e.g., 'ts', 'js', 'py')"
+                },
+                context: {
+                    type: "object",
+                    properties: {
+                        repository: { type: "string" },
+                        branch: { type: "string" },
+                        commitHash: { type: "string" },
+                        filePath: { type: "string" },
+                        pullRequest: { type: "string" }
+                    },
+                    required: []
+                }
+            },
+            required: ["code", "reviewType", "fileExtension"]
+        }
+    },
     {
         name: "openai_chat",
         description: `Use this tool when a user specifically requests to use one of OpenAI's models (${SUPPORTED_MODELS.join(", ")}). This tool sends messages to OpenAI's chat completion API using the specified model.`,
@@ -92,6 +133,86 @@ server.setRequestHandler(CallToolRequestSchema, async (request): Promise<{
     isError?: boolean;
 }> => {
     switch (request.params.name) {
+        case "code_review": {
+            try {
+                const { code, reviewType, fileExtension, context } = request.params.arguments as {
+                    code: string;
+                    reviewType: keyof typeof CODE_REVIEW_PROMPTS;
+                    fileExtension: string;
+                    context?: {
+                        repository?: string;
+                        branch?: string;
+                        commitHash?: string;
+                        filePath?: string;
+                        pullRequest?: string;
+                    };
+                };
+
+                // Select appropriate model and get prompt
+                const prompt = selectModelForReview(fileExtension, code.length, reviewType);
+                
+                // Format the review request
+                const formattedRequest = formatReviewRequest(code, prompt, context);
+
+                // Call OpenAI API
+                const completion = await openai.chat.completions.create({
+                    messages: [
+                        { role: "system", content: prompt.systemPrompt },
+                        { role: "user", content: formattedRequest }
+                    ],
+                    model: prompt.model,
+                    temperature: prompt.temperature,
+                    max_tokens: prompt.maxTokens
+                });
+
+                const response = completion.choices[0]?.message?.content;
+                if (!response) {
+                    throw new Error("No response received from OpenAI");
+                }
+
+                // Parse the JSON response
+                let result: CodeReviewResult;
+                try {
+                    result = JSON.parse(response);
+                } catch (e) {
+                    throw new Error("Failed to parse OpenAI response as CodeReviewResult");
+                }
+
+                // Format the response
+                const formattedResponse = `# Code Review Results (${reviewType})
+
+## Summary
+${result.summary}
+
+## Issues Found
+
+${result.issues.map(issue => `
+### ${issue.category} (${issue.severity})
+${issue.description}
+
+**Suggestion:** ${issue.suggestion}
+${issue.codeExample ? `
+\`\`\`
+${issue.codeExample}
+\`\`\`
+` : ''}`).join('\n')}`;
+
+                return {
+                    content: [{
+                        type: "text",
+                        text: formattedResponse
+                    }]
+                };
+            } catch (error) {
+                return {
+                    content: [{
+                        type: "text",
+                        text: `Code review error: ${(error as Error).message}`
+                    }],
+                    isError: true
+                };
+            }
+        }
         case "openai_chat": {
             try {
                 // Parse request arguments

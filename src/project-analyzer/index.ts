@@ -125,12 +125,16 @@ class ProjectAnalyzer {
         const files = await glob('**/*', {
             cwd: serverPath,
             dot: true,
-            ignore: ['**/node_modules/**', '**/dist/**', '**/build/**']
+            ignore: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.git/**']
         });
+
+        // Determine language by checking for key files
+        const hasTypeScript = files.some(f => f.endsWith('.ts') || f === 'tsconfig.json');
+        const hasPython = files.some(f => f.endsWith('.py') || f === 'pyproject.toml' || f === '.python-version');
 
         const info: McpServerInfo = {
             name: serverName,
-            language: files.some(f => f.endsWith('.ts')) ? 'typescript' : 'python',
+            language: hasTypeScript ? 'typescript' : (hasPython ? 'python' : 'typescript'),
             hasTests: files.some(f => f.includes('test') || f.includes('spec')),
             hasDocumentation: files.some(f => f.endsWith('.md')),
             configFiles: [],
@@ -138,7 +142,39 @@ class ProjectAnalyzer {
             tools: []
         };
 
-        // Analyze package.json or pyproject.toml for dependencies
+        // Get all source files for deeper analysis
+        const sourceFiles = files.filter(f => 
+            (f.endsWith('.ts') || f.endsWith('.py')) && 
+            !f.includes('test') && 
+            !f.includes('dist/')
+        );
+
+        // Look for MCP-specific patterns in source files
+        for (const file of sourceFiles) {
+            try {
+                const content = readFileSync(join(serverPath, file), 'utf8');
+                
+                // Look for tool definitions
+                const toolMatches = content.match(/name:\s*["']([^"']+)["']/g);
+                if (toolMatches) {
+                    info.tools.push(...toolMatches
+                        .map(m => m.match(/["']([^"']+)["']/)![1])
+                        .filter(name => !info.tools.includes(name))
+                    );
+                }
+
+                // Look for resource definitions
+                if (content.includes('ListResourcesRequestSchema') || 
+                    content.includes('ListResourceTemplatesRequestSchema')) {
+                    info.tools.push('resources');
+                }
+            } catch (error) {
+                // Skip file if can't read
+                continue;
+            }
+        }
+
+        // Analyze dependencies and configuration
         try {
             if (info.language === 'typescript') {
                 const packageJson = JSON.parse(readFileSync(join(serverPath, 'package.json'), 'utf8'));
@@ -178,13 +214,38 @@ class ProjectAnalyzer {
             // Index file doesn't exist or is invalid
         }
 
-        // Get config files
-        info.configFiles = files.filter(f => 
-            f.endsWith('.json') || 
-            f.endsWith('.toml') || 
-            f.endsWith('.yaml') || 
-            f.endsWith('.yml') ||
-            f.startsWith('.')
+        // Get config files with better categorization
+        info.configFiles = files.filter(f => {
+            const isConfig = 
+                f.endsWith('.json') || 
+                f.endsWith('.toml') || 
+                f.endsWith('.yaml') || 
+                f.endsWith('.yml') ||
+                f.startsWith('.');
+            
+            // Skip package management files
+            if (f === 'package.json' || f === 'package-lock.json' || f === 'pnpm-lock.yaml') {
+                return false;
+            }
+
+            return isConfig;
+        });
+
+        // Add development status indicators
+        info.hasTests = files.some(f => 
+            f.includes('test') || 
+            f.includes('spec') || 
+            f.endsWith('.test.ts') || 
+            f.endsWith('.spec.ts') || 
+            f.endsWith('_test.py') || 
+            f.endsWith('_spec.py')
+        );
+
+        info.hasDocumentation = files.some(f => 
+            f.endsWith('.md') || 
+            f === 'README' || 
+            f.endsWith('.rst') || 
+            f.includes('docs/')
         );
 
         return info;

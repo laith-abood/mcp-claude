@@ -1,0 +1,32 @@
+{
+  "name": "@mzxrai/mcp-project-analyzer",
+  "version": "0.1.0",
+  "description": "MCP server for intelligent project analysis and coordination",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc && shx chmod +x dist/index.js",
+    "prepare": "npm run build",
+    "dev": "tsx watch index.ts"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "project-analysis",
+    "code-review"
+  ],
+  "author": "laith-abood",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.0.1",
+    "glob": "^10.3.10",
+    "ignore": "^5.3.0",
+    "parse-gitignore": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "shx": "^0.3.4",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}

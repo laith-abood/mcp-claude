@@ -107,6 +107,24 @@ git config --list | grep -E "branch\.|pull\."
 2. Keep main branch clean and only use it for syncing with upstream
 3. Regularly sync with upstream to stay up to date
 4. Use rebase when incorporating upstream changes to maintain a clean history
+5. Never push to upstream repository - all changes should stay in your fork
+6. Only push to origin (your fork) using:
+   ```bash
+   git push origin my-changes  # For your changes
+   git push origin main       # For syncing main
+   ```
+
+## Preventing Accidental Pushes to Upstream
+
+To prevent accidentally pushing to the upstream repository, add this to your git configuration:
+```bash
+git remote set-url --push upstream no_push  # Disables pushing to upstream
+```
+
+This configuration ensures that:
+1. You can pull from upstream to stay in sync
+2. You cannot accidentally push your changes to the upstream repository
+3. All your changes stay exclusively in your fork
 
 ## Troubleshooting
 

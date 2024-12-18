@@ -61,7 +61,10 @@ server-name/
   - [ ] Configuration guide
   - [ ] Development guide
 
-## Current Server Analysis
+## Server Categories
+
+### 1. Reference Servers
+These are official servers demonstrating MCP features and capabilities:
 
 ### API Integration Servers
 
@@ -99,7 +102,7 @@ Status: ✅ Feature Complete
   - Similar to GitHub server
   - GitLab-specific features
 
-### Development Tools
+### Development and Automation Tools
 
 #### Project Analyzer (TypeScript)
 Status: ✅ New
@@ -124,7 +127,7 @@ Status: ✅ Well-structured
   - Comprehensive file operations
   - Directory traversal
 
-### Data Management
+### Data and Storage Management
 
 #### Memory Server (TypeScript)
 Status: ✅ Well-structured
@@ -153,7 +156,7 @@ Status: 🚧 In Development
   - Lightweight database operations
   - Local storage
 
-### Integration Services
+### Service Integration
 
 #### Slack Server (TypeScript)
 Status: ✅ Feature Rich
@@ -179,7 +182,7 @@ Status: ✅ Comprehensive
   - Location services
   - Travel planning
 
-### Browser Automation
+### Browser and Web Automation
 
 #### Puppeteer Server (TypeScript)
 Status: ✅ Well-implemented
@@ -193,7 +196,7 @@ Status: ✅ Well-implemented
   - Visual testing
   - Web scraping
 
-### Search and Retrieval
+### Search and Knowledge Retrieval
 
 #### Brave Search Server (TypeScript)
 Status: ✅ Stable
@@ -211,6 +214,37 @@ Status: ✅ Specialized
 - Features:
   - AWS integration
   - Specialized search
+
+### 2. Third-Party Servers
+
+#### Official Integrations
+Production-ready integrations maintained by companies:
+- **Axiom**: Log and trace analysis
+- **Browserbase**: Browser automation platform
+- **Cloudflare**: Resource management
+- **Raygun**: Crash reporting and monitoring
+- **Obsidian**: Markdown notes management
+- **E2B**: Secure code sandboxes
+- **Exa**: AI-friendly search engine
+- **JetBrains**: IDE integration
+- **Neon**: Serverless PostgreSQL
+- **Neo4j**: Graph database operations
+- **Tinybird**: Serverless ClickHouse
+- **Search1API**: Search and crawling
+- **Qdrant**: Vector database integration
+- **Metoro**: Kubernetes management
+
+#### Community Servers
+Community-contributed servers with diverse functionalities:
+- Database Integration (MySQL, MongoDB, Snowflake)
+- API Integrations (Spotify, Twitter, Linear)
+- Development Tools (Docker, Kubernetes, OpenAPI)
+- Content Management (Notion, Contentful, Airtable)
+- Automation (Home Assistant, Windows CLI)
+- Search and Retrieval (Tavily, RAG Web Browser)
+- Data Visualization (Vega-Lite)
+- Travel and Transportation (NS Travel, FlightRadar24)
+- Document Processing (Pandoc, XMind)
 
 ### Utility Servers
 

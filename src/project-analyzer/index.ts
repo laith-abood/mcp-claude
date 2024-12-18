@@ -15,14 +15,31 @@ import ignore from "ignore";
 import { readFileSync } from "fs";
 import { join, relative, dirname, basename } from "path";
 
+interface McpServerInfo {
+    name: string;
+    language: 'typescript' | 'python';
+    hasTests: boolean;
+    hasDocumentation: boolean;
+    configFiles: string[];
+    dependencies: string[];
+    tools: string[];
+}
+
 interface ProjectStructure {
     mainDirectories: string[];
+    mcpServers: McpServerInfo[];
     sourceDirectories: string[];
     testDirectories: string[];
     configFiles: string[];
     packageFiles: string[];
     documentationFiles: string[];
     gitFiles: string[];
+}
+
+interface ServerCapabilities {
+    hasTools: boolean;
+    hasResources: boolean;
+    hasResourceTemplates: boolean;
 }
 
 interface DependencyInfo {
@@ -104,6 +121,75 @@ const TOOLS: Tool[] = [
 ];
 
 class ProjectAnalyzer {
+    private async analyzeMcpServer(serverPath: string, serverName: string): Promise<McpServerInfo> {
+        const files = await glob('**/*', {
+            cwd: serverPath,
+            dot: true,
+            ignore: ['**/node_modules/**', '**/dist/**', '**/build/**']
+        });
+
+        const info: McpServerInfo = {
+            name: serverName,
+            language: files.some(f => f.endsWith('.ts')) ? 'typescript' : 'python',
+            hasTests: files.some(f => f.includes('test') || f.includes('spec')),
+            hasDocumentation: files.some(f => f.endsWith('.md')),
+            configFiles: [],
+            dependencies: [],
+            tools: []
+        };
+
+        // Analyze package.json or pyproject.toml for dependencies
+        try {
+            if (info.language === 'typescript') {
+                const packageJson = JSON.parse(readFileSync(join(serverPath, 'package.json'), 'utf8'));
+                info.dependencies = [
+                    ...Object.keys(packageJson.dependencies || {}),
+                    ...Object.keys(packageJson.devDependencies || {})
+                ];
+            } else {
+                const pyproject = readFileSync(join(serverPath, 'pyproject.toml'), 'utf8');
+                // Extract dependencies from pyproject.toml (simplified)
+                const depMatches = pyproject.match(/dependencies\s*=\s*\[(.*?)\]/s);
+                if (depMatches) {
+                    info.dependencies = depMatches[1].split('\n')
+                        .map(line => line.trim())
+                        .filter(line => line && !line.startsWith('#'));
+                }
+            }
+        } catch (error) {
+            // Package file doesn't exist or is invalid
+        }
+
+        // Analyze server capabilities by checking imports and code patterns
+        try {
+            const indexContent = readFileSync(
+                join(serverPath, info.language === 'typescript' ? 'index.ts' : 'server.py'),
+                'utf8'
+            );
+            
+            // Look for tool and resource definitions
+            if (indexContent.includes('setRequestHandler(ListToolsRequestSchema')) {
+                const toolMatches = indexContent.match(/name:\s*["']([^"']+)["']/g);
+                if (toolMatches) {
+                    info.tools = toolMatches.map(m => m.match(/["']([^"']+)["']/)![1]);
+                }
+            }
+        } catch (error) {
+            // Index file doesn't exist or is invalid
+        }
+
+        // Get config files
+        info.configFiles = files.filter(f => 
+            f.endsWith('.json') || 
+            f.endsWith('.toml') || 
+            f.endsWith('.yaml') || 
+            f.endsWith('.yml') ||
+            f.startsWith('.')
+        );
+
+        return info;
+    }
+
     private async getProjectStructure(projectPath: string): Promise<ProjectStructure> {
         const ig = ignore();
         try {
@@ -121,6 +207,7 @@ class ProjectAnalyzer {
 
         const structure: ProjectStructure = {
             mainDirectories: [],
+            mcpServers: [],
             sourceDirectories: [],
             testDirectories: [],
             configFiles: [],
@@ -128,6 +215,20 @@ class ProjectAnalyzer {
             documentationFiles: [],
             gitFiles: []
         };
+
+        // First, identify and analyze each MCP server
+        const serverDirs = (await glob('*/', { cwd: projectPath }))
+            .map(dir => dir.replace(/\/$/, ''))
+            .filter(dir => !dir.startsWith('.'));
+
+        for (const serverDir of serverDirs) {
+            const serverInfo = await this.analyzeMcpServer(
+                join(projectPath, serverDir),
+                serverDir
+            );
+            structure.mcpServers.push(serverInfo);
+            structure.mainDirectories.push(serverDir);
+        }
 
         for (const file of allFiles) {
             if (ig.ignores(file)) continue;
@@ -364,41 +465,46 @@ Note: This strategy is based on the project structure and changed files. Adjust 
                     return {
                         content: [{
                             type: "text",
-                            text: `# Project Structure Analysis
+                            text: `# MCP Servers Analysis
 
-## Main Languages
-${insights.mainLanguages.map(lang => `- ${lang}`).join('\n')}
+## Server Overview
+${insights.structure.mcpServers.map(server => `
+### ${server.name}
+- Language: ${server.language}
+- Tests: ${server.hasTests ? '✅' : '❌'}
+- Documentation: ${server.hasDocumentation ? '✅' : '❌'}
+- Tools: ${server.tools.length > 0 ? '\n  ' + server.tools.map(t => `- ${t}`).join('\n  ') : 'None defined'}
+- Dependencies: ${server.dependencies.length > 0 ? '\n  ' + server.dependencies.map(d => `- ${d}`).join('\n  ') : 'None found'}
+- Config Files: ${server.configFiles.length > 0 ? '\n  ' + server.configFiles.map(f => `- ${f}`).join('\n  ') : 'None found'}
+`).join('\n')}
 
-## Frameworks and Tools
-${insights.frameworksDetected.length > 0 ? `\nFrameworks:\n${insights.frameworksDetected.map(f => `- ${f}`).join('\n')}` : ''}
-${insights.testingFrameworks.length > 0 ? `\nTesting Frameworks:\n${insights.testingFrameworks.map(f => `- ${f}`).join('\n')}` : ''}
-${insights.buildTools.length > 0 ? `\nBuild Tools:\n${insights.buildTools.map(t => `- ${t}`).join('\n')}` : ''}
+## Development Recommendations
 
-## Directory Structure
-Main Directories:
-${insights.structure.mainDirectories.map(d => `- ${d}`).join('\n')}
+### Testing Coverage
+${insights.structure.mcpServers.filter(s => !s.hasTests).map(s => `- Add tests for ${s.name}`).join('\n')}
 
-Source Code:
-${insights.structure.sourceDirectories.map(d => `- ${d}`).join('\n')}
+### Documentation
+${insights.structure.mcpServers.filter(s => !s.hasDocumentation).map(s => `- Add documentation for ${s.name}`).join('\n')}
 
-Tests:
-${insights.structure.testDirectories.map(d => `- ${d}`).join('\n')}
+### Tool Implementation
+${insights.structure.mcpServers.filter(s => s.tools.length === 0).map(s => `- Define tools for ${s.name}`).join('\n')}
 
-## Configuration
-${insights.structure.configFiles.map(f => `- ${f}`).join('\n')}
+### Configuration
+${insights.structure.mcpServers.map(s => `- ${s.name}: ${s.configFiles.length} config files`).join('\n')}
 
-## Dependencies
-Production Dependencies:
-${insights.dependencies.production.map(d => `- ${d.name}@${d.version}`).join('\n')}
+## Review Priorities
+1. Implement missing tests for servers without coverage
+2. Add documentation where missing
+3. Define tools for servers that lack them
+4. Standardize configuration across servers
+5. Update dependencies to latest versions
 
-Development Dependencies:
-${insights.dependencies.development.map(d => `- ${d.name}@${d.version}`).join('\n')}
-
-## Review Recommendations
-1. Focus on ${insights.mainLanguages[0]} best practices
-2. Use framework-specific linting rules for ${insights.frameworksDetected.join(', ')}
-3. Ensure test coverage with ${insights.testingFrameworks.join(', ')}
-4. Follow build optimization guidelines for ${insights.buildTools.join(', ')}`
+## Development Guidelines
+1. Maintain consistent structure across servers
+2. Implement both tools and resources where applicable
+3. Include comprehensive testing
+4. Provide detailed documentation
+5. Follow language-specific best practices (TypeScript/Python)`
                         }]
                     };
                 }

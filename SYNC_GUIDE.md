@@ -4,12 +4,25 @@
 
 ```
 Origin (Your Fork)
-├── main (tracks upstream/main)
-└── my-changes (your work branch)
+├── main (tracks upstream/main) - DO NOT WORK HERE
+└── my-changes (YOUR PRIMARY BRANCH) ← Use this for all your work!
 
 Upstream (Original Repo)
 └── main (source of truth)
 ```
+
+## Branch Usage
+
+### DO NOT USE: main branch
+- This branch is ONLY for syncing with upstream
+- Never commit directly to this branch
+- Only updates through pulling from upstream
+
+### USE THIS: my-changes branch
+- This is your PRIMARY working branch
+- Make all your changes here
+- This branch is private to your fork
+- This is where you should be most of the time
 
 ## Remote Configuration
 

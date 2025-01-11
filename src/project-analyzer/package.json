@@ -1,0 +1,27 @@
+{
+  "name": "@modelcontextprotocol/server-project-analyzer",
+  "version": "0.1.0",
+  "description": "Project analysis MCP server",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "mcp-server-project-analyzer": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc && chmod +x dist/index.js",
+    "prepare": "npm run build",
+    "watch": "tsc --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "0.6.0",
+    "glob": "^10.3.10"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.24",
+    "@types/glob": "^8.1.0",
+    "typescript": "^5.3.3"
+  }
+}

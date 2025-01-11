@@ -9,6 +9,10 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 // Fixed chalk import for ESM
 import chalk from 'chalk';
+import { ErrorHandler } from "../shared/error-handler.js";
+import { Logger } from "../shared/logger.js";
+
+const logger = Logger.getInstance();
 
 interface ThoughtData {
   thought: string;
@@ -101,7 +105,7 @@ class SequentialThinkingServer {
       }
 
       const formattedThought = this.formatThought(validatedInput);
-      console.error(formattedThought);
+      logger.info(formattedThought);
 
       return {
         content: [{
@@ -116,6 +120,7 @@ class SequentialThinkingServer {
         }]
       };
     } catch (error) {
+      ErrorHandler.handleError(error as Error);
       return {
         content: [{
           type: "text",
@@ -269,10 +274,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function runServer() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("Sequential Thinking MCP Server running on stdio");
+  logger.info("Sequential Thinking MCP Server running on stdio");
 }
 
 runServer().catch((error) => {
-  console.error("Fatal error running server:", error);
+  ErrorHandler.handleError(error);
   process.exit(1);
 });

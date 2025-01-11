@@ -9,6 +9,10 @@ import {
 import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { ErrorHandler } from "../shared/error-handler.js";
+import { Logger } from "../shared/logger.js";
+
+const logger = Logger.getInstance();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MEMORY_FILE_PATH = path.join(__dirname, 'memory.json');
@@ -1296,6 +1300,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         throw new Error(`Unknown tool: ${name}`);
     }
   } catch (error) {
+    ErrorHandler.handleError(error);
     return {
       content: [{ type: "text", text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
       isError: true
@@ -1306,10 +1311,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("Enhanced Knowledge Graph MCP Server running on stdio");
+  logger.info("Enhanced Knowledge Graph MCP Server running on stdio");
 }
 
 main().catch((error) => {
-  console.error("Fatal error in main():", error);
+  ErrorHandler.handleError(error);
   process.exit(1);
 });

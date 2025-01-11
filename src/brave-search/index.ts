@@ -7,6 +7,10 @@ import {
   ListToolsRequestSchema,
   Tool,
 } from "@modelcontextprotocol/sdk/types.js";
+import { ErrorHandler } from "../shared/error-handler.js";
+import { Logger } from "../shared/logger.js";
+
+const logger = Logger.getInstance();
 
 const CODE_SEARCH_TOOL: Tool = {
   name: "brave_code_search",
@@ -648,6 +652,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
     }
   } catch (error) {
+    ErrorHandler.handleError(error);
     return {
       content: [
         {
@@ -663,10 +668,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function runServer() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("Brave Search MCP Server running on stdio");
+  logger.info("Brave Search MCP Server running on stdio");
 }
 
 runServer().catch((error) => {
-  console.error("Fatal error running server:", error);
+  ErrorHandler.handleError(error);
   process.exit(1);
 });

@@ -14,6 +14,10 @@ import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { diffLines, createTwoFilesPatch } from 'diff';
 import { minimatch } from 'minimatch';
+import { ErrorHandler } from "../shared/error-handler.js";
+import { Logger } from "../shared/logger.js";
+
+const logger = Logger.getInstance();
 
 // Command line argument parsing
 const args = process.argv.slice(2);
@@ -862,6 +866,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         throw new Error(`Unknown tool: ${name}`);
     }
   } catch (error) {
+    ErrorHandler.handleError(error);
     const errorMessage = error instanceof Error ? error.message : String(error);
     return {
       content: [{ type: "text", text: `Error: ${errorMessage}` }],
@@ -874,11 +879,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function runServer() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("Secure MCP Filesystem Server running on stdio");
-  console.error("Allowed directories:", allowedDirectories);
+  logger.info("Secure MCP Filesystem Server running on stdio");
+  logger.info("Allowed directories:", allowedDirectories);
 }
 
 runServer().catch((error) => {
-  console.error("Fatal error running server:", error);
+  ErrorHandler.handleError(error);
   process.exit(1);
 });

@@ -167,6 +167,10 @@ export class Logger {
     this.log(LogLevel.ERROR, message, context, error);
   }
 
+  logError(error: Error, context?: Record<string, unknown>): void {
+    this.error('An error occurred', error, context);
+  }
+
   // Specialized logging methods
   request(
     method: string,

@@ -1,5 +1,22 @@
 {
+  "name": "@modelcontextprotocol/server-openai",
+  "version": "0.1.0",
+  "description": "OpenAI MCP server",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc && shx chmod +x dist/*.js",
+    "prepare": "npm run build",
+    "watch": "tsc --watch"
+  },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.0.1",
+    "dotenv": "^16.0.0",
     "openai": "^4.78.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "shx": "^0.3.4",
+    "typescript": "^5.6.2"
   }
 }

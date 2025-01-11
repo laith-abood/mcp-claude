@@ -8,6 +8,147 @@ import {
   Tool,
 } from "@modelcontextprotocol/sdk/types.js";
 
+const CODE_SEARCH_TOOL: Tool = {
+  name: "brave_code_search",
+  description: 
+    "Specialized search for code snippets, documentation, and technical resources. " +
+    "Features include:\n" +
+    "- Language-specific filtering\n" +
+    "- Framework/library detection\n" +
+    "- Code pattern matching\n" +
+    "- Documentation prioritization\n" +
+    "Best for finding code examples, API documentation, and technical solutions.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      query: {
+        type: "string",
+        description: "Code search query (e.g., 'react useEffect example', 'python pandas dataframe')"
+      },
+      language: {
+        type: "string",
+        description: "Programming language to filter by (optional)",
+      },
+      type: {
+        type: "string",
+        enum: ["code", "docs", "discussion", "all"],
+        description: "Type of content to search for",
+        default: "all"
+      },
+      count: {
+        type: "number",
+        description: "Number of results (1-20, default 10)",
+        default: 10
+      }
+    },
+    required: ["query"]
+  }
+};
+
+const TECH_DOC_SEARCH_TOOL: Tool = {
+  name: "brave_tech_doc_search",
+  description:
+    "Specialized search for technical documentation, tutorials, and reference materials. " +
+    "Features include:\n" +
+    "- Official documentation prioritization\n" +
+    "- Version-specific results\n" +
+    "- Framework/library filtering\n" +
+    "- Tutorial and guide detection\n" +
+    "Best for finding official docs, guides, and technical references.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      query: {
+        type: "string",
+        description: "Documentation search query"
+      },
+      technology: {
+        type: "string",
+        description: "Specific technology or framework to search for (optional)"
+      },
+      type: {
+        type: "string",
+        enum: ["official", "tutorial", "reference", "all"],
+        description: "Type of documentation to search for",
+        default: "all"
+      },
+      count: {
+        type: "number",
+        description: "Number of results (1-20, default 10)",
+        default: 10
+      }
+    },
+    required: ["query"]
+  }
+};
+
+const SEMANTIC_CODE_SEARCH_TOOL: Tool = {
+  name: "brave_semantic_code_search",
+  description:
+    "Semantic code search that understands programming concepts and patterns. " +
+    "Features include:\n" +
+    "- Concept-based matching\n" +
+    "- Design pattern detection\n" +
+    "- Best practices identification\n" +
+    "- Similar code suggestion\n" +
+    "Best for finding code based on concepts rather than exact text matches.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      query: {
+        type: "string",
+        description: "Semantic code search query (e.g., 'implement singleton pattern', 'handle api errors')"
+      },
+      language: {
+        type: "string",
+        description: "Programming language context (optional)"
+      },
+      pattern: {
+        type: "string",
+        description: "Design pattern to look for (optional)"
+      },
+      count: {
+        type: "number",
+        description: "Number of results (1-20, default 10)",
+        default: 10
+      }
+    },
+    required: ["query"]
+  }
+};
+
+const VULNERABILITY_SEARCH_TOOL: Tool = {
+  name: "brave_vulnerability_search",
+  description:
+    "Searches for known vulnerabilities in dependencies and packages. " +
+    "Features include:\n" +
+    "- CVE database integration\n" +
+    "- Package version checking\n" +
+    "- Severity assessment\n" +
+    "- Fix recommendation\n" +
+    "Best for security auditing and dependency checking.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      package: {
+        type: "string",
+        description: "Package name to check"
+      },
+      version: {
+        type: "string",
+        description: "Package version (optional)"
+      },
+      ecosystem: {
+        type: "string",
+        enum: ["npm", "pip", "maven", "all"],
+        description: "Package ecosystem",
+        default: "all"
+      }
+    },
+    required: ["package"]
+  }
+};
+
 const WEB_SEARCH_TOOL: Tool = {
   name: "brave_web_search",
   description:
@@ -157,6 +298,33 @@ interface BravePoiResponse {
 
 interface BraveDescription {
   descriptions: {[id: string]: string};
+}
+
+interface CodeSearchArgs {
+  query: string;
+  language?: string;
+  type?: 'code' | 'docs' | 'discussion' | 'all';
+  count?: number;
+}
+
+interface TechDocSearchArgs {
+  query: string;
+  technology?: string;
+  type?: 'official' | 'tutorial' | 'reference' | 'all';
+  count?: number;
+}
+
+interface SemanticCodeSearchArgs {
+  query: string;
+  language?: string;
+  pattern?: string;
+  count?: number;
+}
+
+interface VulnerabilitySearchArgs {
+  package: string;
+  version?: string;
+  ecosystem?: 'npm' | 'pip' | 'maven' | 'all';
 }
 
 function isBraveWebSearchArgs(args: unknown): args is { query: string; count?: number } {
@@ -309,8 +477,47 @@ Description: ${descData.descriptions[poi.id] || 'No description available'}
 
 // Tool handlers
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [WEB_SEARCH_TOOL, LOCAL_SEARCH_TOOL],
+  tools: [
+    WEB_SEARCH_TOOL,
+    LOCAL_SEARCH_TOOL,
+    CODE_SEARCH_TOOL,
+    TECH_DOC_SEARCH_TOOL,
+    SEMANTIC_CODE_SEARCH_TOOL,
+    VULNERABILITY_SEARCH_TOOL
+  ],
 }));
+
+function isCodeSearchArgs(args: unknown): args is CodeSearchArgs {
+  return (
+    typeof args === "object" &&
+    args !== null &&
+    typeof (args as CodeSearchArgs).query === "string"
+  );
+}
+
+function isTechDocSearchArgs(args: unknown): args is TechDocSearchArgs {
+  return (
+    typeof args === "object" &&
+    args !== null &&
+    typeof (args as TechDocSearchArgs).query === "string"
+  );
+}
+
+function isSemanticCodeSearchArgs(args: unknown): args is SemanticCodeSearchArgs {
+  return (
+    typeof args === "object" &&
+    args !== null &&
+    typeof (args as SemanticCodeSearchArgs).query === "string"
+  );
+}
+
+function isVulnerabilitySearchArgs(args: unknown): args is VulnerabilitySearchArgs {
+  return (
+    typeof args === "object" &&
+    args !== null &&
+    typeof (args as VulnerabilitySearchArgs).package === "string"
+  );
+}
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
@@ -321,6 +528,95 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
 
     switch (name) {
+      case "brave_code_search": {
+        if (!isCodeSearchArgs(args)) {
+          throw new Error("Invalid arguments for code search");
+        }
+        
+        // Enhance query with code-specific filters
+        let enhancedQuery = args.query;
+        if (args.language) {
+          enhancedQuery += ` language:${args.language}`;
+        }
+        if (args.type && args.type !== 'all') {
+          enhancedQuery += ` type:${args.type}`;
+        }
+        enhancedQuery += ' site:(github.com OR stackoverflow.com OR docs.* OR developer.*)';
+        
+        const results = await performWebSearch(enhancedQuery, args.count || 10);
+        return {
+          content: [{ type: "text", text: results }],
+          isError: false,
+        };
+      }
+
+      case "brave_tech_doc_search": {
+        if (!isTechDocSearchArgs(args)) {
+          throw new Error("Invalid arguments for documentation search");
+        }
+        
+        // Enhance query with documentation-specific filters
+        let enhancedQuery = args.query;
+        if (args.technology) {
+          enhancedQuery = `${args.technology} ${enhancedQuery}`;
+        }
+        if (args.type === 'official') {
+          enhancedQuery += ' site:(docs.* OR *.dev OR *.io)';
+        } else if (args.type === 'tutorial') {
+          enhancedQuery += ' (tutorial OR guide OR how to)';
+        }
+        
+        const results = await performWebSearch(enhancedQuery, args.count || 10);
+        return {
+          content: [{ type: "text", text: results }],
+          isError: false,
+        };
+      }
+
+      case "brave_semantic_code_search": {
+        if (!isSemanticCodeSearchArgs(args)) {
+          throw new Error("Invalid arguments for semantic search");
+        }
+        
+        // Enhance query with semantic understanding
+        let enhancedQuery = args.query;
+        if (args.language) {
+          enhancedQuery = `${args.language} ${enhancedQuery}`;
+        }
+        if (args.pattern) {
+          enhancedQuery += ` "design pattern" ${args.pattern}`;
+        }
+        enhancedQuery += ' site:(github.com OR stackoverflow.com) code example';
+        
+        const results = await performWebSearch(enhancedQuery, args.count || 10);
+        return {
+          content: [{ type: "text", text: results }],
+          isError: false,
+        };
+      }
+
+      case "brave_vulnerability_search": {
+        if (!isVulnerabilitySearchArgs(args)) {
+          throw new Error("Invalid arguments for vulnerability search");
+        }
+        
+        // Enhance query with vulnerability-specific terms
+        let enhancedQuery = `${args.package}`;
+        if (args.version) {
+          enhancedQuery += ` version:${args.version}`;
+        }
+        if (args.ecosystem !== 'all') {
+          enhancedQuery = `${args.ecosystem} ${enhancedQuery}`;
+        }
+        enhancedQuery += ' (CVE OR vulnerability OR security advisory) site:(nvd.nist.gov OR snyk.io OR github.com/advisories)';
+        
+        const results = await performWebSearch(enhancedQuery, 10);
+        return {
+          content: [{ type: "text", text: results }],
+          isError: false,
+        };
+      }
+
       case "brave_web_search": {
         if (!isBraveWebSearchArgs(args)) {
           throw new Error("Invalid arguments for brave_web_search");

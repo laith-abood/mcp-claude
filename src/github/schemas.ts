@@ -683,8 +683,93 @@ export const GetIssueSchema = z.object({
   issue_number: z.number().describe("Issue number")
 });
 
+// PR Review Automation schemas
+export const CodeReviewCommentSchema = z.object({
+  path: z.string().describe("File path being reviewed"),
+  position: z.number().describe("Line number in the file"),
+  body: z.string().describe("Review comment content"),
+  line: z.number().optional().describe("Line number in the diff"),
+  side: z.enum(['LEFT', 'RIGHT']).optional().describe("Which side of the diff"),
+  start_line: z.number().optional().describe("Start line for multi-line comments"),
+  start_side: z.enum(['LEFT', 'RIGHT']).optional()
+});
+
+export const CreateReviewSchema = RepoParamsSchema.extend({
+  pull_number: z.number(),
+  event: z.enum(['APPROVE', 'REQUEST_CHANGES', 'COMMENT']),
+  body: z.string().optional(),
+  comments: z.array(CodeReviewCommentSchema).optional()
+});
+
+// Code Quality Check schemas
+export const CodeQualityMetricsSchema = z.object({
+  complexity: z.number(),
+  maintainability: z.number(),
+  testCoverage: z.number().optional(),
+  duplication: z.number(),
+  lintIssues: z.array(z.object({
+    path: z.string(),
+    line: z.number(),
+    rule: z.string(),
+    severity: z.enum(['error', 'warning', 'info']),
+    message: z.string()
+  }))
+});
+
+export const AnalyzeCodeQualitySchema = RepoParamsSchema.extend({
+  ref: z.string().describe("Branch, tag, or commit SHA"),
+  paths: z.array(z.string()).optional().describe("Specific files to analyze")
+});
+
+// Security Scanning schemas
+export const SecurityVulnerabilitySchema = z.object({
+  id: z.string(),
+  severity: z.enum(['critical', 'high', 'medium', 'low']),
+  title: z.string(),
+  description: z.string(),
+  path: z.string().optional(),
+  line: z.number().optional(),
+  cwe: z.string().optional(),
+  fix_recommendation: z.string().optional()
+});
+
+export const SecurityScanSchema = RepoParamsSchema.extend({
+  ref: z.string(),
+  scan_type: z.enum(['dependency', 'sast', 'secret']).array(),
+  paths: z.array(z.string()).optional()
+});
+
+// Release Automation schemas
+export const ReleaseAssetSchema = z.object({
+  name: z.string(),
+  path: z.string(),
+  label: z.string().optional(),
+  content_type: z.string().optional()
+});
+
+export const CreateReleaseSchema = RepoParamsSchema.extend({
+  tag_name: z.string(),
+  target_commitish: z.string().optional(),
+  name: z.string().optional(),
+  body: z.string().optional(),
+  draft: z.boolean().optional(),
+  prerelease: z.boolean().optional(),
+  generate_release_notes: z.boolean().optional(),
+  assets: z.array(ReleaseAssetSchema).optional()
+});
+
+export const GenerateChangelogSchema = RepoParamsSchema.extend({
+  from_tag: z.string().optional(),
+  to_tag: z.string().optional(),
+  include_types: z.array(z.enum(['feat', 'fix', 'docs', 'style', 'refactor', 'perf', 'test', 'build', 'ci', 'chore', 'revert'])).optional()
+});
+
 // Export types
 export type GitHubAuthor = z.infer<typeof GitHubAuthorSchema>;
+export type CodeReviewComment = z.infer<typeof CodeReviewCommentSchema>;
+export type CodeQualityMetrics = z.infer<typeof CodeQualityMetricsSchema>;
+export type SecurityVulnerability = z.infer<typeof SecurityVulnerabilitySchema>;
+export type ReleaseAsset = z.infer<typeof ReleaseAssetSchema>;
 export type GitHubFork = z.infer<typeof GitHubForkSchema>;
 export type GitHubIssue = z.infer<typeof GitHubIssueSchema>;
 export type GitHubPullRequest = z.infer<typeof GitHubPullRequestSchema>;
@@ -717,3 +802,89 @@ export type SearchIssueItem = z.infer<typeof SearchIssueItemSchema>;
 export type SearchIssuesResponse = z.infer<typeof SearchIssuesResponseSchema>;
 export type SearchUserItem = z.infer<typeof SearchUserItemSchema>;
 export type SearchUsersResponse = z.infer<typeof SearchUsersResponseSchema>;
+
+// GitHub API response types
+export interface GitHubFile {
+  type: string;
+  path: string;
+  download_url: string;
+}
+
+export interface GitHubDependency {
+  name: string;
+  vulnerability?: {
+    severity: 'critical' | 'high' | 'medium' | 'low';
+    description: string;
+  };
+}
+
+export interface GitHubRelease {
+  id: number;
+  tag_name: string;
+  target_commitish: string;
+  name: string;
+  body: string;
+  draft: boolean;
+  prerelease: boolean;
+  created_at: string;
+  published_at: string;
+  upload_url: string;
+  assets_url: string;
+  html_url: string;
+  assets: GitHubUploadAsset[];
+}
+
+export interface GitHubUploadAsset {
+  id: number;
+  name: string;
+  label: string | null;
+  state: string;
+  content_type: string;
+  size: number;
+  download_count: number;
+  created_at: string;
+  updated_at: string;
+  browser_download_url: string;
+}
+
+// Response schemas for new endpoints
+export const GitHubReleaseSchema = z.object({
+  id: z.number(),
+  tag_name: z.string(),
+  target_commitish: z.string(),
+  name: z.string(),
+  body: z.string(),
+  draft: z.boolean(),
+  prerelease: z.boolean(),
+  created_at: z.string(),
+  published_at: z.string(),
+  upload_url: z.string(),
+  assets_url: z.string(),
+  html_url: z.string(),
+  assets: z.array(z.object({
+    id: z.number(),
+    name: z.string(),
+    label: z.string().nullable(),
+    state: z.string(),
+    content_type: z.string(),
+    size: z.number(),
+    download_count: z.number(),
+    created_at: z.string(),
+    updated_at: z.string(),
+    browser_download_url: z.string()
+  }))
+});
+
+export const GitHubFileSchema = z.object({
+  type: z.string(),
+  path: z.string(),
+  download_url: z.string()
+});
+
+export const GitHubDependencySchema = z.object({
+  name: z.string(),
+  vulnerability: z.object({
+    severity: z.enum(['critical', 'high', 'medium', 'low']),
+    description: z.string()
+  }).optional()
+});

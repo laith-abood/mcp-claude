@@ -157,7 +157,74 @@ interface FileInfo {
   isDirectory: boolean;
   isFile: boolean;
   permissions: string;
+  type: string;
+  encoding: string;
+  hash: string;
+  lineCount?: number;
+  wordCount?: number;
+  changeHistory?: ChangeRecord[];
+  backupInfo?: BackupInfo;
+  codeMetrics?: CodeMetrics;
 }
+
+interface ChangeRecord {
+  timestamp: Date;
+  type: 'create' | 'modify' | 'delete' | 'backup';
+  size: number;
+  hash: string;
+}
+
+interface BackupInfo {
+  lastBackup: Date;
+  backupLocation: string;
+  versions: number;
+  totalSize: number;
+}
+
+interface CodeMetrics {
+  language: string;
+  loc: number;
+  sloc: number;
+  comments: number;
+  functions: number;
+  classes: number;
+  complexity: number;
+  maintainability: number;
+  dependencies: string[];
+}
+
+const FileTypePatterns = {
+  text: /\.(txt|md|log)$/i,
+  code: /\.(js|ts|py|java|cpp|h|cs|go|rb|php|html|css|sql)$/i,
+  document: /\.(doc|docx|pdf|rtf|odt)$/i,
+  image: /\.(jpg|jpeg|png|gif|bmp|svg)$/i,
+  audio: /\.(mp3|wav|ogg|flac|m4a)$/i,
+  video: /\.(mp4|avi|mov|wmv|flv|mkv)$/i,
+  archive: /\.(zip|rar|7z|tar|gz|bz2)$/i,
+  binary: /\.(exe|dll|so|dylib|bin)$/i
+} as const;
+
+const CodeLanguagePatterns = {
+  javascript: /\.js$/i,
+  typescript: /\.ts$/i,
+  python: /\.py$/i,
+  java: /\.java$/i,
+  cpp: /\.(cpp|cc|cxx)$/i,
+  csharp: /\.cs$/i,
+  go: /\.go$/i,
+  ruby: /\.rb$/i,
+  php: /\.php$/i,
+  html: /\.(html|htm)$/i,
+  css: /\.css$/i,
+  sql: /\.sql$/i
+} as const;
+
+const BackupConfig = {
+  maxVersions: 5,
+  backupDir: '.backups',
+  interval: 24 * 60 * 60 * 1000, // 24 hours
+  compressionLevel: 9
+} as const;
 
 // Server setup
 const server = new Server(
@@ -175,7 +242,11 @@ const server = new Server(
 // Tool implementations
 async function getFileStats(filePath: string): Promise<FileInfo> {
   const stats = await fs.stat(filePath);
-  return {
+  const fileType = detectFileType(filePath);
+  const encoding = await detectFileEncoding(filePath);
+  const hash = await calculateFileHash(filePath);
+  
+  const baseInfo = {
     size: stats.size,
     created: stats.birthtime,
     modified: stats.mtime,
@@ -183,6 +254,172 @@ async function getFileStats(filePath: string): Promise<FileInfo> {
     isDirectory: stats.isDirectory(),
     isFile: stats.isFile(),
     permissions: stats.mode.toString(8).slice(-3),
+    type: fileType,
+    encoding: encoding,
+    hash: hash
+  };
+
+  if (stats.isFile()) {
+    const content = await fs.readFile(filePath, 'utf-8');
+    const lines = content.split('\n');
+    const words = content.split(/\s+/).filter(Boolean);
+
+    return {
+      ...baseInfo,
+      lineCount: lines.length,
+      wordCount: words.length,
+      changeHistory: await getChangeHistory(filePath),
+      backupInfo: await getBackupInfo(filePath),
+      ...(isCodeFile(filePath) && { codeMetrics: await analyzeCode(filePath, content) })
+    };
+  }
+
+  return baseInfo;
+}
+
+function detectFileType(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  
+  for (const [type, pattern] of Object.entries(FileTypePatterns)) {
+    if (pattern.test(ext)) return type;
+  }
+  
+  return 'unknown';
+}
+
+async function detectFileEncoding(filePath: string): Promise<string> {
+  try {
+    const buffer = await fs.readFile(filePath);
+    // Simple UTF-8 detection
+    const isUtf8 = buffer.toString('utf8').includes('�') === false;
+    return isUtf8 ? 'utf-8' : 'binary';
+  } catch {
+    return 'unknown';
+  }
+}
+
+async function calculateFileHash(filePath: string): Promise<string> {
+  const crypto = await import('crypto');
+  const content = await fs.readFile(filePath);
+  return crypto.createHash('sha256').update(content).digest('hex');
+}
+
+function isCodeFile(filePath: string): boolean {
+  return FileTypePatterns.code.test(path.extname(filePath));
+}
+
+async function getChangeHistory(filePath: string): Promise<ChangeRecord[]> {
+  const backupDir = path.join(path.dirname(filePath), BackupConfig.backupDir);
+  const baseName = path.basename(filePath);
+  
+  try {
+    const backups = await fs.readdir(backupDir);
+    return await Promise.all(
+      backups
+        .filter(f => f.startsWith(baseName))
+        .map(async backup => {
+          const backupPath = path.join(backupDir, backup);
+          const stats = await fs.stat(backupPath);
+          return {
+            timestamp: stats.mtime,
+            type: 'backup',
+            size: stats.size,
+            hash: await calculateFileHash(backupPath)
+          };
+        })
+    );
+  } catch {
+    return [];
+  }
+}
+
+async function getBackupInfo(filePath: string): Promise<BackupInfo> {
+  const backupDir = path.join(path.dirname(filePath), BackupConfig.backupDir);
+  const baseName = path.basename(filePath);
+  
+  try {
+    const backups = await fs.readdir(backupDir);
+    const versions = backups.filter(f => f.startsWith(baseName));
+    
+    let totalSize = 0;
+    let lastBackup = new Date(0);
+    
+    for (const version of versions) {
+      const stats = await fs.stat(path.join(backupDir, version));
+      totalSize += stats.size;
+      if (stats.mtime > lastBackup) {
+        lastBackup = stats.mtime;
+      }
+    }
+    
+    return {
+      lastBackup,
+      backupLocation: backupDir,
+      versions: versions.length,
+      totalSize
+    };
+  } catch {
+    return {
+      lastBackup: new Date(0),
+      backupLocation: backupDir,
+      versions: 0,
+      totalSize: 0
+    };
+  }
+}
+
+async function analyzeCode(filePath: string, content: string): Promise<CodeMetrics> {
+  const ext = path.extname(filePath);
+  let language = 'unknown';
+  
+  for (const [lang, pattern] of Object.entries(CodeLanguagePatterns)) {
+    if (pattern.test(ext)) {
+      language = lang;
+      break;
+    }
+  }
+  
+  const lines = content.split('\n');
+  const nonEmptyLines = lines.filter(line => line.trim().length > 0);
+  const commentLines = lines.filter(line => {
+    const trimmed = line.trim();
+    return trimmed.startsWith('//') || 
+           trimmed.startsWith('#') || 
+           trimmed.startsWith('/*') ||
+           trimmed.startsWith('*') ||
+           trimmed.startsWith('"""');
+  });
+  
+  const functionMatches = content.match(/function\s+\w+\s*\(|def\s+\w+\s*\(|class\s+\w+/g) || [];
+  const classMatches = content.match(/class\s+\w+/g) || [];
+  
+  // Simple complexity metric based on control structures
+  const controlStructures = (content.match(/if|for|while|switch|catch/g) || []).length;
+  const complexity = controlStructures / nonEmptyLines.length;
+  
+  // Simple maintainability index calculation
+  const maintainability = Math.max(0, Math.min(100,
+    100 - (complexity * 25) - 
+    (commentLines.length / nonEmptyLines.length * 50) -
+    (functionMatches.length / nonEmptyLines.length * 25)
+  ));
+  
+  // Extract import/require statements for dependencies
+  const dependencies = [
+    ...(content.match(/import\s+.*?from\s+['"](.+?)['"]/g) || []),
+    ...(content.match(/require\s*\(\s*['"](.+?)['"]\s*\)/g) || [])
+  ].map(dep => dep.replace(/.*?['"](.+?)['"].*/, '$1'));
+  
+  return {
+    language,
+    loc: lines.length,
+    sloc: nonEmptyLines.length,
+    comments: commentLines.length,
+    functions: functionMatches.length,
+    classes: classMatches.length,
+    complexity,
+    maintainability,
+    dependencies
   };
 }
 

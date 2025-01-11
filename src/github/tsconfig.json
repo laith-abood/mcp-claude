@@ -1,11 +1,13 @@
 {
-    "extends": "../../tsconfig.json",
-    "compilerOptions": {
-      "outDir": "./dist",
-      "rootDir": "."
-    },
-    "include": [
-      "./**/*.ts"
-    ]
-  }
-  
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../../dist/github",
+    "rootDir": ".",
+    "composite": true,
+    "tsBuildInfoFile": "../../dist/github/.tsbuildinfo"
+  },
+  "references": [
+    { "path": "../shared" }
+  ],
+  "include": ["./**/*"]
+}

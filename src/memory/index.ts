@@ -23,6 +23,24 @@ interface Entity {
   accessCount?: number;
   createdAt?: number;
   updatedAt?: number;
+  priority?: number;
+  contextCategory?: 'core' | 'recent' | 'background';
+  confidence?: number;
+  source?: string;
+  expiresAt?: number;
+  validationStatus?: 'verified' | 'inferred' | 'uncertain';
+}
+
+interface MemoryContext {
+  id: string;
+  timestamp: number;
+  entities: string[];
+  relations: string[];
+  summary: string;
+  priority: number;
+  category: string;
+  source: string;
+  validUntil?: number;
 }
 
 interface Relation {
@@ -36,22 +54,118 @@ interface Relation {
 }
 
 interface Pattern {
+  id: string;
   entities: Entity[];
   relations: Relation[];
   frequency: number;
   lastSeen: number;
+  confidence: number;
+  context: string;
+  category: string;
+  priority: number;
+  validUntil?: number;
+}
+
+interface MemoryStats {
+  totalEntities: number;
+  totalRelations: number;
+  totalPatterns: number;
+  categoryCounts: Record<string, number>;
+  avgConfidence: number;
+  recentAccess: number;
+  storageUsage: number;
+  compressionRatio: number;
+  semanticClusters: number;
+  temporalDensity: number;
+  staleEntities: number;
+  qualityScore: number;
+}
+
+interface SemanticVector {
+  vector: number[];
+  timestamp: number;
+  source: string;
+}
+
+interface MemoryCompression {
+  originalSize: number;
+  compressedSize: number;
+  summary: string;
+  keywords: string[];
+  semanticHash: string;
+}
+
+interface TemporalMetadata {
+  firstSeen: number;
+  lastSeen: number;
+  frequency: number;
+  seasonality?: {
+    pattern: 'daily' | 'weekly' | 'monthly' | 'yearly';
+    confidence: number;
+  };
+}
+
+interface QualityMetrics {
+  completeness: number;
+  consistency: number;
+  recency: number;
+  relevance: number;
+  reliability: number;
 }
 
 interface KnowledgeGraph {
   entities: Entity[];
   relations: Relation[];
   patterns?: Pattern[];
+  contexts: MemoryContext[];
+  stats: MemoryStats;
+  lastOptimized?: number;
+  version: string;
 }
 
 class KnowledgeGraphManager {
   private patterns: Map<string, Pattern> = new Map();
   private cache: Map<string, any> = new Map();
   private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+  private readonly OPTIMIZATION_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
+  private readonly MAX_CONTEXTS = 1000;
+
+  async optimizeMemory(): Promise<void> {
+    const graph = await this.loadGraph();
+    const now = Date.now();
+
+    // Remove expired contexts
+    graph.contexts = graph.contexts.filter(ctx => 
+      !ctx.validUntil || ctx.validUntil > now
+    );
+
+    // Sort contexts by priority
+    graph.contexts.sort((a, b) => b.priority - a.priority);
+
+    // Keep only MAX_CONTEXTS most relevant contexts
+    if (graph.contexts.length > this.MAX_CONTEXTS) {
+      graph.contexts = graph.contexts.slice(0, this.MAX_CONTEXTS);
+    }
+
+    // Update entity priorities based on context
+    graph.entities.forEach(entity => {
+      const relatedContexts = graph.contexts.filter(ctx => 
+        ctx.entities.includes(entity.name)
+      );
+      
+      if (relatedContexts.length > 0) {
+        entity.priority = relatedContexts.reduce((sum, ctx) => 
+          sum + ctx.priority, 0
+        ) / relatedContexts.length;
+      }
+    });
+
+    // Update stats
+    graph.stats = this.calculateStats(graph);
+    graph.lastOptimized = now;
+
+    await this.saveGraph(graph);
+  }
 
   private async loadGraph(): Promise<KnowledgeGraph> {
     const cacheKey = 'fullGraph';
@@ -63,24 +177,71 @@ class KnowledgeGraphManager {
     try {
       const data = await fs.readFile(MEMORY_FILE_PATH, "utf-8");
       const lines = data.split("\n").filter(line => line.trim() !== "");
-      const graph = lines.reduce((graph: KnowledgeGraph, line) => {
-        const item = JSON.parse(line);
-        if (item.type === "entity") graph.entities.push(item as Entity);
-        if (item.type === "relation") graph.relations.push(item as Relation);
-        return graph;
-      }, { entities: [], relations: [], patterns: [] });
+      
+      const initialGraph: KnowledgeGraph = {
+        entities: [],
+        relations: [],
+        patterns: [],
+        contexts: [],
+          stats: {
+            totalEntities: 0,
+            totalRelations: 0,
+            totalPatterns: 0,
+            categoryCounts: {},
+            avgConfidence: 0,
+            recentAccess: 0,
+            storageUsage: 0,
+            compressionRatio: 1,
+            semanticClusters: 0,
+            temporalDensity: 0,
+            staleEntities: 0,
+            qualityScore: 0
+          },
+        version: "1.0.0"
+      };
 
+      const graph = lines.reduce((acc, line) => {
+        const item = JSON.parse(line);
+        if (item.type === "entity") acc.entities.push(item as Entity);
+        if (item.type === "relation") acc.relations.push(item as Relation);
+        if (item.type === "context") acc.contexts.push(item as MemoryContext);
+        return acc;
+      }, initialGraph);
+
+      // Update stats
+      graph.stats = this.calculateStats(graph);
+      
       this.cache.set(cacheKey, { data: graph, timestamp: Date.now() });
       return graph;
     } catch (error) {
       if (error instanceof Error && 'code' in error && (error as any).code === "ENOENT") {
-        return { entities: [], relations: [], patterns: [] };
+        return {
+          entities: [],
+          relations: [],
+          patterns: [],
+          contexts: [],
+          stats: {
+            totalEntities: 0,
+            totalRelations: 0,
+            totalPatterns: 0,
+            categoryCounts: {},
+            avgConfidence: 0,
+            recentAccess: 0,
+            storageUsage: 0,
+            compressionRatio: 1,
+            semanticClusters: 0,
+            temporalDensity: 0,
+            staleEntities: 0,
+            qualityScore: 0
+          },
+          version: "1.0.0"
+        };
       }
       throw error;
     }
   }
 
-  private async saveGraph(graph: KnowledgeGraph): Promise<void> {
+  async saveGraph(graph: KnowledgeGraph): Promise<void> {
     const timestamp = Date.now();
     const lines = [
       ...graph.entities.map(e => JSON.stringify({ 
@@ -93,7 +254,19 @@ class KnowledgeGraphManager {
         ...r,
         updatedAt: timestamp 
       })),
+      ...graph.contexts.map(c => JSON.stringify({
+        type: "context",
+        ...c,
+        updatedAt: timestamp
+      }))
     ];
+
+    // Check if optimization is needed
+    const now = Date.now();
+    if (!graph.lastOptimized || now - graph.lastOptimized > this.OPTIMIZATION_INTERVAL) {
+      await this.optimizeMemory();
+      graph.lastOptimized = now;
+    }
     await fs.writeFile(MEMORY_FILE_PATH, lines.join("\n"));
     this.cache.clear();
   }
@@ -132,6 +305,255 @@ class KnowledgeGraphManager {
     return (accessFactor * 0.4 + (1 / recencyFactor) * 0.3 + sharedObservations * 0.3);
   }
 
+  private calculateStats(graph: KnowledgeGraph): MemoryStats {
+    const now = Date.now();
+    const DAY = 24 * 60 * 60 * 1000;
+    const categoryCounts: Record<string, number> = {};
+    let totalConfidence = 0;
+    let recentAccess = 0;
+    let staleEntities = 0;
+    let totalQuality = 0;
+
+    // Calculate basic stats
+    graph.entities.forEach(entity => {
+      if (entity.contextCategory) {
+        categoryCounts[entity.contextCategory] = 
+          (categoryCounts[entity.contextCategory] || 0) + 1;
+      }
+      if (entity.confidence) {
+        totalConfidence += entity.confidence;
+      }
+      if (entity.lastAccessed && now - entity.lastAccessed < DAY) {
+        recentAccess++;
+      }
+      if (entity.lastAccessed && now - entity.lastAccessed > 30 * DAY) {
+        staleEntities++;
+      }
+
+      // Calculate quality metrics
+      const quality = this.calculateQualityMetrics(entity);
+      totalQuality += (
+        quality.completeness * 0.2 +
+        quality.consistency * 0.2 +
+        quality.recency * 0.2 +
+        quality.relevance * 0.2 +
+        quality.reliability * 0.2
+      );
+    });
+
+    // Calculate semantic clusters using k-means
+    const semanticClusters = this.calculateSemanticClusters(graph.entities);
+
+    // Calculate temporal density
+    const temporalDensity = this.calculateTemporalDensity(graph);
+
+    // Calculate compression ratio
+    const compression = this.compressMemory(graph);
+    const compressionRatio = compression.originalSize / compression.compressedSize;
+
+    return {
+      totalEntities: graph.entities.length,
+      totalRelations: graph.relations.length,
+      totalPatterns: graph.patterns?.length || 0,
+      categoryCounts,
+      avgConfidence: totalConfidence / (graph.entities.length || 1),
+      recentAccess,
+      storageUsage: JSON.stringify(graph).length,
+      compressionRatio,
+      semanticClusters: semanticClusters.length,
+      temporalDensity,
+      staleEntities,
+      qualityScore: totalQuality / (graph.entities.length || 1)
+    };
+  }
+
+  private calculateQualityMetrics(entity: Entity): QualityMetrics {
+    const now = Date.now();
+    const DAY = 24 * 60 * 60 * 1000;
+
+    // Completeness: ratio of filled optional fields
+    const optionalFields = ['tags', 'metadata', 'contextCategory', 'source'];
+    const completeness = optionalFields.filter(field => entity[field as keyof Entity]).length / optionalFields.length;
+
+    // Consistency: check for contradictions in observations
+    const consistency = this.checkConsistency(entity.observations);
+
+    // Recency: exponential decay based on last update
+    const recency = Math.exp(-(now - (entity.updatedAt || now)) / (30 * DAY));
+
+    // Relevance: based on access patterns and relations
+    const relevance = (entity.accessCount || 0) / 100; // Normalized to 0-1
+
+    // Reliability: based on source and validation status
+    const reliability = entity.validationStatus === 'verified' ? 1 :
+                       entity.validationStatus === 'inferred' ? 0.7 :
+                       0.4;
+
+    return {
+      completeness,
+      consistency,
+      recency,
+      relevance,
+      reliability
+    };
+  }
+
+  private checkConsistency(observations: string[]): number {
+    // Simple contradiction detection using keywords
+    const contradictionPairs = [
+      ['always', 'never'],
+      ['true', 'false'],
+      ['high', 'low'],
+      ['increase', 'decrease']
+    ];
+
+    let contradictions = 0;
+    observations.forEach((obs, i) => {
+      observations.slice(i + 1).forEach(otherObs => {
+        contradictionPairs.forEach(([a, b]) => {
+          if ((obs.includes(a) && otherObs.includes(b)) ||
+              (obs.includes(b) && otherObs.includes(a))) {
+            contradictions++;
+          }
+        });
+      });
+    });
+
+    return Math.max(0, 1 - (contradictions / observations.length));
+  }
+
+  private calculateSemanticClusters(entities: Entity[]): Array<{
+    centroid: SemanticVector;
+    members: Entity[];
+  }> {
+    // Simplified k-means clustering based on observation similarity
+    const k = Math.min(5, Math.ceil(entities.length / 10));
+    const clusters: Array<{
+      centroid: SemanticVector;
+      members: Entity[];
+    }> = [];
+
+    // Initialize clusters with random entities
+    for (let i = 0; i < k; i++) {
+      const randomEntity = entities[Math.floor(Math.random() * entities.length)];
+      clusters.push({
+        centroid: {
+          vector: this.entityToVector(randomEntity),
+          timestamp: Date.now(),
+          source: 'clustering'
+        },
+        members: []
+      });
+    }
+
+    // Assign entities to nearest cluster
+    entities.forEach(entity => {
+      let minDistance = Infinity;
+      let nearestCluster = clusters[0];
+
+      clusters.forEach(cluster => {
+        const distance = this.calculateDistance(
+          this.entityToVector(entity),
+          cluster.centroid.vector
+        );
+        if (distance < minDistance) {
+          minDistance = distance;
+          nearestCluster = cluster;
+        }
+      });
+
+      nearestCluster.members.push(entity);
+    });
+
+    return clusters;
+  }
+
+  private entityToVector(entity: Entity): number[] {
+    // Simple vector representation based on observation words
+    const words = entity.observations
+      .join(' ')
+      .toLowerCase()
+      .split(/\W+/)
+      .filter(w => w.length > 0);
+    
+    // Create a basic frequency vector
+    const vector = new Array(100).fill(0);
+    words.forEach(word => {
+      const hash = this.simpleHash(word);
+      vector[hash % 100]++;
+    });
+    
+    return vector;
+  }
+
+  private simpleHash(str: string): number {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) - hash) + str.charCodeAt(i);
+      hash = hash & hash;
+    }
+    return Math.abs(hash);
+  }
+
+  private calculateDistance(vec1: number[], vec2: number[]): number {
+    return Math.sqrt(
+      vec1.reduce((sum, val, i) => sum + Math.pow(val - vec2[i], 2), 0)
+    );
+  }
+
+  private calculateTemporalDensity(graph: KnowledgeGraph): number {
+    const now = Date.now();
+    const timeWindow = 30 * 24 * 60 * 60 * 1000; // 30 days
+    
+    // Count events in time window
+    const events = graph.entities
+      .map(e => e.updatedAt || e.createdAt || 0)
+      .concat(graph.relations.map(r => r.updatedAt || r.createdAt || 0))
+      .filter(timestamp => now - timestamp < timeWindow);
+    
+    // Calculate density as events per day
+    return events.length / 30;
+  }
+
+  private compressMemory(graph: KnowledgeGraph): MemoryCompression {
+    const originalSize = JSON.stringify(graph).length;
+    
+    // Generate summary
+    const summary = `Knowledge graph with ${graph.entities.length} entities and ${graph.relations.length} relations. ` +
+      `Main categories: ${Object.keys(graph.stats.categoryCounts).join(', ')}`;
+    
+    // Extract keywords
+    const keywords = new Set<string>();
+    graph.entities.forEach(entity => {
+      keywords.add(entity.entityType);
+      entity.tags?.forEach(tag => keywords.add(tag));
+    });
+    
+    // Calculate semantic hash
+    const semanticHash = this.calculateSemanticHash(graph);
+    
+    // Estimate compressed size (actual compression would be more complex)
+    const compressedSize = originalSize * 0.6;
+    
+    return {
+      originalSize,
+      compressedSize,
+      summary,
+      keywords: Array.from(keywords),
+      semanticHash
+    };
+  }
+
+  private calculateSemanticHash(graph: KnowledgeGraph): string {
+    // Create a deterministic hash of the graph's semantic content
+    const content = graph.entities
+      .map(e => `${e.name}:${e.entityType}:${e.observations.join(',')}`)
+      .sort()
+      .join('|');
+    
+    return this.simpleHash(content).toString(16);
+  }
+
   private detectPatterns(graph: KnowledgeGraph): Pattern[] {
     const patterns: Pattern[] = [];
     const now = Date.now();
@@ -158,11 +580,21 @@ class KnowledgeGraphManager {
           );
 
           if (sharedObservations.length > 0 || sharedTags.length > 0) {
+            const patternId = `pattern_${entity1.name}_${entity2.name}_${now}`;
+            const confidence = (sharedObservations.length + sharedTags.length) / 
+                             Math.max(entity1.observations.length, entity2.observations.length);
+            
             patterns.push({
+              id: patternId,
               entities: [entity1, entity2],
               relations,
               frequency: sharedObservations.length + sharedTags.length,
-              lastSeen: now
+              lastSeen: now,
+              confidence,
+              context: `Pattern between ${entity1.name} and ${entity2.name}`,
+              category: confidence > 0.7 ? 'strong' : confidence > 0.4 ? 'moderate' : 'weak',
+              priority: confidence,
+              validUntil: now + (30 * 24 * 60 * 60 * 1000) // 30 days
             });
           }
         }
@@ -304,7 +736,19 @@ class KnowledgeGraphManager {
       relations: filteredRelations,
       patterns: graph.patterns?.filter(p => 
         p.entities.some(e => filteredEntityNames.has(e.name))
-      )
+      ),
+      contexts: graph.contexts.filter(ctx =>
+        ctx.entities.some(e => filteredEntityNames.has(e))
+      ),
+      stats: this.calculateStats({
+        entities: filteredEntities,
+        relations: filteredRelations,
+        patterns: graph.patterns || [],
+        contexts: graph.contexts,
+        stats: graph.stats,
+        version: graph.version
+      }),
+      version: graph.version
     };
     
     await this.saveGraph(graph); // Save updated access metadata
@@ -424,6 +868,57 @@ const server = new Server({
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
+    {
+      name: "optimize_memory",
+      description: "Optimize memory storage by cleaning up old contexts and updating priorities",
+      inputSchema: {
+        type: "object",
+        properties: {},
+      }
+    },
+    {
+      name: "get_memory_stats",
+      description: "Get statistics about the current memory state",
+      inputSchema: {
+        type: "object",
+        properties: {},
+      }
+    },
+    {
+      name: "create_context",
+      description: "Create a new memory context",
+      inputSchema: {
+        type: "object",
+        properties: {
+          entities: {
+            type: "array",
+            items: { type: "string" },
+            description: "Entity names involved in this context"
+          },
+          summary: {
+            type: "string",
+            description: "Summary of the context"
+          },
+          category: {
+            type: "string",
+            description: "Context category (core, recent, background)"
+          },
+          priority: {
+            type: "number",
+            description: "Initial priority (0-1)"
+          },
+          source: {
+            type: "string",
+            description: "Source of the context"
+          },
+          validUntil: {
+            type: "number",
+            description: "Optional timestamp when this context expires"
+          }
+        },
+        required: ["entities", "summary", "category", "priority", "source"]
+      }
+    },
     {
       name: "create_entities",
       description: "Create multiple new entities in the knowledge graph",
@@ -758,6 +1253,44 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           entities: filteredEntities,
           relations: filteredRelations
         }, null, 2) }] };
+
+      case "optimize_memory":
+        await knowledgeGraphManager.optimizeMemory();
+        return { content: [{ type: "text", text: "Memory optimization completed successfully" }] };
+
+      case "get_memory_stats":
+        const stats = (await knowledgeGraphManager.readGraph()).stats;
+        return { content: [{ type: "text", text: JSON.stringify(stats, null, 2) }] };
+
+      case "create_context": {
+        if (!Array.isArray(args.entities) || !args.entities.every(e => typeof e === "string") ||
+            typeof args.summary !== "string" ||
+            typeof args.category !== "string" ||
+            typeof args.priority !== "number" ||
+            typeof args.source !== "string") {
+          throw new Error("Invalid context creation parameters");
+        }
+
+        const validUntil = args.validUntil ? Number(args.validUntil) : undefined;
+
+        const context: MemoryContext = {
+          id: `ctx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          timestamp: Date.now(),
+          entities: args.entities,
+          relations: [],
+          summary: args.summary,
+          category: args.category,
+          priority: args.priority,
+          source: args.source,
+          validUntil
+        };
+
+        const currentGraph = await knowledgeGraphManager.readGraph();
+        currentGraph.contexts.push(context);
+        await knowledgeGraphManager.saveGraph(currentGraph);
+
+        return { content: [{ type: "text", text: JSON.stringify(context, null, 2) }] };
+      }
 
       default:
         throw new Error(`Unknown tool: ${name}`);

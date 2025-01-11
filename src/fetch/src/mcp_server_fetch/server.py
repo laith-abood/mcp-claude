@@ -18,6 +18,10 @@ from mcp.types import (
 )
 from protego import Protego
 from pydantic import BaseModel, Field, AnyUrl
+from src.shared.error-handler import ErrorHandler
+from src.shared.logger import Logger
+
+logger = Logger.getInstance()
 
 DEFAULT_USER_AGENT_AUTONOMOUS = "ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)"
 DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)"
@@ -78,7 +82,8 @@ async def check_may_autonomously_fetch_url(url: str, user_agent: str) -> None:
                 follow_redirects=True,
                 headers={"User-Agent": user_agent},
             )
-        except HTTPError:
+        except HTTPError as e:
+            ErrorHandler.handleError(e)
             raise McpError(
                 INTERNAL_ERROR,
                 f"Failed to fetch robots.txt {robot_txt_url} due to a connection issue",
@@ -124,6 +129,7 @@ async def fetch_url(
                 timeout=30,
             )
         except HTTPError as e:
+            ErrorHandler.handleError(e)
             raise McpError(INTERNAL_ERROR, f"Failed to fetch {url}: {e!r}")
         if response.status_code >= 400:
             raise McpError(
@@ -221,6 +227,7 @@ Although originally you did not have internet access, and were advised to refuse
         try:
             args = Fetch(**arguments)
         except ValueError as e:
+            ErrorHandler.handleError(e)
             raise McpError(INVALID_PARAMS, str(e))
 
         url = str(args.url)
@@ -261,6 +268,7 @@ Although originally you did not have internet access, and were advised to refuse
             content, prefix = await fetch_url(url, user_agent_manual)
             # TODO: after SDK bug is addressed, don't catch the exception
         except McpError as e:
+            ErrorHandler.handleError(e)
             return GetPromptResult(
                 description=f"Failed to fetch {url}",
                 messages=[
@@ -282,3 +290,4 @@ Although originally you did not have internet access, and were advised to refuse
     options = server.create_initialization_options()
     async with stdio_server() as (read_stream, write_stream):
         await server.run(read_stream, write_stream, options, raise_exceptions=True)
+

@@ -10,6 +10,10 @@ import {
 import { glob } from 'glob';
 import { readFile } from 'fs/promises';
 import { join, extname, dirname } from 'path';
+import { ErrorHandler } from "../shared/error-handler.js";
+import { Logger } from "../shared/logger.js";
+
+const logger = Logger.getInstance();
 
 interface ProjectAnalysisArgs {
   projectPath: string;
@@ -259,7 +263,7 @@ class ProjectAnalyzerServer {
 
   private setupErrorHandling(): void {
     this.server.onerror = (error: Error) => {
-      console.error("[MCP Error]", error);
+      ErrorHandler.handleError(error);
     };
 
     process.on('SIGINT', async () => {
@@ -973,6 +977,7 @@ class ProjectAnalyzerServer {
             throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${request.params.name}`);
         }
       } catch (error) {
+        ErrorHandler.handleError(error);
         return {
           content: [
             {
@@ -989,9 +994,12 @@ class ProjectAnalyzerServer {
   async run(): Promise<void> {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-    console.error("Enhanced Project Analyzer MCP server running on stdio");
+    logger.info("Enhanced Project Analyzer MCP server running on stdio");
   }
 }
 
 const server = new ProjectAnalyzerServer();
-server.run().catch(console.error);
+server.run().catch((error) => {
+  ErrorHandler.handleError(error);
+  process.exit(1);
+});

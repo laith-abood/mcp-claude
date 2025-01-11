@@ -13,6 +13,8 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 import { promises as fs } from 'fs';
 import { BaseMcpServer, LogMethod } from '../shared/index.js';
 import * as schemas from './schemas.js';
+import { ErrorHandler } from "../shared/error-handler.js";
+import { Logger } from "../shared/logger.js";
 
 type Environment = 'development' | 'staging' | 'production';
 
@@ -20,6 +22,7 @@ class GitHubServer extends BaseMcpServer {
   private server: Server;
   private readonly baseUrl = 'https://api.github.com';
   private readonly userAgent = 'github-mcp-server';
+  private logger: Logger;
 
   constructor() {
     super({
@@ -40,6 +43,7 @@ class GitHubServer extends BaseMcpServer {
     );
 
     this.server.onerror = (error) => this.logger.error('Server error', error);
+    this.logger = Logger.getInstance();
   }
 
   @LogMethod()
@@ -140,7 +144,7 @@ class GitHubServer extends BaseMcpServer {
           };
         });
       } catch (error) {
-        this.logger.error('Tool call failed', error as Error);
+        ErrorHandler.handleError(error as Error);
         return {
           content: [{ type: 'text', text: `Error: ${(error as Error).message}` }],
           isError: true
@@ -646,4 +650,7 @@ class GitHubServer extends BaseMcpServer {
 
 // Start the server
 const server = new GitHubServer();
-server.start().catch(console.error);
+server.start().catch((error) => {
+  ErrorHandler.handleError(error);
+  process.exit(1);
+});

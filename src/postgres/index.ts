@@ -9,6 +9,10 @@ import {
   ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import pg from "pg";
+import { ErrorHandler } from "../shared/error-handler.js";
+import { Logger } from "../shared/logger.js";
+
+const logger = Logger.getInstance();
 
 const server = new Server(
   {
@@ -54,6 +58,9 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => {
         name: `"${row.table_name}" database schema`,
       })),
     };
+  } catch (error) {
+    ErrorHandler.handleError(error);
+    throw error;
   } finally {
     client.release();
   }
@@ -67,7 +74,9 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   const tableName = pathComponents.pop();
 
   if (schema !== SCHEMA_PATH) {
-    throw new Error("Invalid resource URI");
+    const error = new Error("Invalid resource URI");
+    ErrorHandler.handleError(error);
+    throw error;
   }
 
   const client = await pool.connect();
@@ -86,6 +95,9 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
         },
       ],
     };
+  } catch (error) {
+    ErrorHandler.handleError(error);
+    throw error;
   } finally {
     client.release();
   }
@@ -121,6 +133,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         isError: false,
       };
     } catch (error) {
+      ErrorHandler.handleError(error);
       throw error;
     } finally {
       client
@@ -132,12 +145,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       client.release();
     }
   }
-  throw new Error(`Unknown tool: ${request.params.name}`);
+  const error = new Error(`Unknown tool: ${request.params.name}`);
+  ErrorHandler.handleError(error);
+  throw error;
 });
 
 async function runServer() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  logger.info("Postgres MCP Server running on stdio");
 }
 
-runServer().catch(console.error);
+runServer().catch((error) => {
+  ErrorHandler.handleError(error);
+  process.exit(1);
+});

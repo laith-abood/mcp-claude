@@ -122,7 +122,7 @@ export class Logger {
     return output;
   }
 
-  private log(
+  log(
     level: LogLevel,
     message: string,
     context?: Record<string, unknown>,
@@ -259,3 +259,5 @@ export function LogMethod(): MethodDecorator {
     return descriptor;
   };
 }
+
+export { Logger };

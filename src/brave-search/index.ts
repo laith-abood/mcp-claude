@@ -7,6 +7,12 @@ import {
   ListToolsRequestSchema,
   Tool,
 } from "@modelcontextprotocol/sdk/types.js";
+import nodeFetch from 'node-fetch';
+
+// Use imported fetch directly
+const fetchWithTimeout = async (url: string | URL, init?: any) => {
+  return nodeFetch(url, { ...init, timeout: 10000 });
+};
 
 const WEB_SEARCH_TOOL: Tool = {
   name: "brave_web_search",
@@ -178,36 +184,75 @@ function isBraveLocalSearchArgs(args: unknown): args is { query: string; count?:
 }
 
 async function performWebSearch(query: string, count: number = 10, offset: number = 0) {
-  checkRateLimit();
-  const url = new URL('https://api.search.brave.com/res/v1/web/search');
-  url.searchParams.set('q', query);
-  url.searchParams.set('count', Math.min(count, 20).toString()); // API limit
-  url.searchParams.set('offset', offset.toString());
-
-  const response = await fetch(url, {
-    headers: {
-      'Accept': 'application/json',
-      'Accept-Encoding': 'gzip',
-      'X-Subscription-Token': BRAVE_API_KEY
-    }
-  });
-
-  if (!response.ok) {
-    throw new Error(`Brave API error: ${response.status} ${response.statusText}\n${await response.text()}`);
+  // Input validation
+  if (!query.trim()) {
+    throw new Error('Search query cannot be empty');
   }
-
-  const data = await response.json() as BraveWeb;
-
-  // Extract just web results
-  const results = (data.web?.results || []).map(result => ({
-    title: result.title || '',
-    description: result.description || '',
-    url: result.url || ''
-  }));
-
-  return results.map(r =>
-    `Title: ${r.title}\nDescription: ${r.description}\nURL: ${r.url}`
-  ).join('\n\n');
+  
+  if (query.length > 400) {
+    throw new Error('Search query exceeds maximum length of 400 characters');
+  }
+  
+  // Enforce limits
+  count = Math.min(Math.max(1, count), 20); // Ensure count is between 1-20
+  offset = Math.min(Math.max(0, offset), 9); // Ensure offset is between 0-9
+  
+  await checkRateLimit();
+  
+  // Process query exclusions
+  const queryParts = query.split(' ');
+  const processedQuery = queryParts.map(part => {
+    if (part.startsWith('-')) {
+      // If it's just a word, add site: prefix
+      if (!part.includes(':')) {
+        return `-site:${part.substring(1)}`;
+      }
+    }
+    return part;
+  }).join(' ');
+  
+  const searchUrl = new URL('https://api.search.brave.com/res/v1/web/search');
+  searchUrl.searchParams.append('q', processedQuery);
+  searchUrl.searchParams.append('count', count.toString());
+  searchUrl.searchParams.append('offset', offset.toString());
+  searchUrl.searchParams.append('search_lang', 'en');
+  searchUrl.searchParams.append('safesearch', 'moderate');
+  
+  try {
+    const response = await fetchWithTimeout(searchUrl.toString(), {
+      headers: {
+        'Accept': 'application/json',
+        'Accept-Encoding': 'gzip',
+        'X-Subscription-Token': BRAVE_API_KEY
+      }
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Brave search failed (${response.status}): ${errorText || response.statusText}`);
+    }
+    
+    const data = await response.json() as BraveWeb;
+    
+    if (!data.web?.results?.length) {
+      return "No results found for the given query.";
+    }
+    
+    return data.web.results
+      .map((result, i) => {
+        const rank = result.rank || i + 1;
+        const published = result.published ? ` (${result.published})` : '';
+        const language = result.language ? `[${result.language}] ` : '';
+        return `${rank}. ${language}${result.title}${published}\n${result.description}\nURL: ${result.url}\n`;
+      })
+      .join('\n');
+      
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(`Search failed: ${error.message}`);
+    }
+    throw error;
+  }
 }
 
 async function performLocalSearch(query: string, count: number = 5) {
@@ -219,7 +264,7 @@ async function performLocalSearch(query: string, count: number = 5) {
   webUrl.searchParams.set('result_filter', 'locations');
   webUrl.searchParams.set('count', Math.min(count, 20).toString());
 
-  const webResponse = await fetch(webUrl, {
+  const webResponse = await fetchWithTimeout(webUrl, {
     headers: {
       'Accept': 'application/json',
       'Accept-Encoding': 'gzip',
@@ -251,7 +296,7 @@ async function getPoisData(ids: string[]): Promise<BravePoiResponse> {
   checkRateLimit();
   const url = new URL('https://api.search.brave.com/res/v1/local/pois');
   ids.filter(Boolean).forEach(id => url.searchParams.append('ids', id));
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     headers: {
       'Accept': 'application/json',
       'Accept-Encoding': 'gzip',
@@ -271,7 +316,7 @@ async function getDescriptionsData(ids: string[]): Promise<BraveDescription> {
   checkRateLimit();
   const url = new URL('https://api.search.brave.com/res/v1/local/descriptions');
   ids.filter(Boolean).forEach(id => url.searchParams.append('ids', id));
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     headers: {
       'Accept': 'application/json',
       'Accept-Encoding': 'gzip',

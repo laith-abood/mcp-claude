@@ -38,12 +38,20 @@ npm install -g @modelcontextprotocol/sdk
 npm install -g @modelcontextprotocol/create-server
 
 # Server-specific packages
+npm install -g @modelcontextprotocol/server-aws-kb-retrieval
 npm install -g @modelcontextprotocol/server-brave-search
-npm install -g @modelcontextprotocol/server-github
-npm install -g @modelcontextprotocol/server-memory
-npm install -g @modelcontextprotocol/server-filesystem
-npm install -g @modelcontextprotocol/server-sequential-thinking
+npm install -g @modelcontextprotocol/server-everart
 npm install -g @modelcontextprotocol/server-everything
+npm install -g @modelcontextprotocol/server-filesystem
+npm install -g @modelcontextprotocol/server-github
+npm install -g @modelcontextprotocol/server-gitlab
+npm install -g @modelcontextprotocol/server-google-maps
+npm install -g @modelcontextprotocol/server-memory
+npm install -g @modelcontextprotocol/server-phi4
+npm install -g @modelcontextprotocol/server-postgres
+npm install -g @modelcontextprotocol/server-puppeteer
+npm install -g @modelcontextprotocol/server-sequential-thinking
+npm install -g @modelcontextprotocol/server-slack
 ```
 
 ## Python Servers
@@ -55,13 +63,21 @@ Set up Python environments and install dependencies for Python-based servers:
 python3.10 -m venv venv
 source venv/bin/activate  # or `venv\Scripts\activate` on Windows
 
+# AWS KB Retrieval server
+cd src/aws-kb-retrieval-server
+pip install -r requirements.txt
+
 # Fetch server
-cd src/fetch
+cd ../fetch
 python -m pip install -e .
 
 # Git server
 cd ../git
 python -m pip install -e .
+
+# Sentry server
+cd ../sentry
+pip install -r requirements.txt
 
 # SQLite server
 cd ../sqlite
@@ -73,14 +89,41 @@ python -m pip install -e .
 
 # Logic server
 cd ../logic
-python -m pip install -e .
+pip install -r requirements.txt
 ```
 
 ## Individual Server Dependencies
 
+### AWS KB Retrieval Server
+```bash
+npm install @aws-sdk/client-kendra
+```
+
+### EverArt Server
+```bash
+npm install @modelcontextprotocol/server-everart
+npm install sharp canvas
+```
+
 ### Brave Search Server
 ```bash
 npm install axios
+```
+
+### Everything Server
+```bash
+npm install @modelcontextprotocol/server-everything
+npm install esbuild typescript
+```
+
+### GitLab Server
+```bash
+npm install @gitbeaker/node
+```
+
+### Google Maps Server
+```bash
+npm install @googlemaps/google-maps-services-js
 ```
 
 ### GitHub Server
@@ -96,7 +139,32 @@ npm install googleapis@105 google-auth-library
 ### Memory Server
 ```bash
 npm install @modelcontextprotocol/server-memory
-npm install sentence-transformers # for vector embeddings
+npm install sentence-transformers
+```
+
+### Phi4 Server
+```bash
+npm install @modelcontextprotocol/server-phi4
+```
+
+### PostgreSQL Server
+```bash
+npm install pg pg-native
+```
+
+### Puppeteer Server
+```bash
+npm install puppeteer puppeteer-extra
+```
+
+### Sequential Thinking Server
+```bash
+npm install @modelcontextprotocol/server-sequential-thinking
+```
+
+### Slack Server
+```bash
+npm install @slack/web-api
 ```
 
 ### SQLite Server
@@ -109,14 +177,14 @@ pip install aiosqlite
 npm install chokidar mime-types
 ```
 
-### Sequential Thinking Server
-```bash
-npm install @modelcontextprotocol/server-sequential-thinking
-```
-
 ### Time Server
 ```bash
 pip install pytz dateutil
+```
+
+### Sentry Server
+```bash
+pip install sentry-sdk
 ```
 
 ### Logic Server

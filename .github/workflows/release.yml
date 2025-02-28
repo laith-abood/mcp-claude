@@ -35,11 +35,12 @@ jobs:
           echo "version $VERSION"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Create notes
+      - name: Generate Release Notes
         run: |
-          HASH="${{ steps.last-release.outputs.hash }}"
+          HASH=$(git rev-list --tags --max-count=1 || echo "HEAD~1")
           uv run --script scripts/release.py generate-notes --directory src/ $HASH > RELEASE_NOTES.md
-          cat RELEASE_NOTES.md
+        env:
+          UV_CACHE_DIR: ${{ runner.temp }}/setup-uv-cache
 
       - name: Release notes
         uses: actions/upload-artifact@v4

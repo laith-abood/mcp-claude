@@ -38,6 +38,7 @@ jobs:
       - name: Generate Release Notes
         run: |
           HASH=$(git rev-list --tags --max-count=1 || echo "HEAD~1")
+          echo "Using HASH: $HASH"
           uv run --script scripts/release.py generate-notes --directory src/ $HASH > RELEASE_NOTES.md
         env:
           UV_CACHE_DIR: ${{ runner.temp }}/setup-uv-cache

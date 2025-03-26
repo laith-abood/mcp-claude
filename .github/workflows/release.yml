@@ -100,7 +100,6 @@ jobs:
             git tag -a "$VERSION" -m "Release $VERSION"
             git push origin "$VERSION"
             echo "changes_made=true" >> $GITHUB_OUTPUT
-          fi
 
   publish-pypi:
     needs: [update-packages, create-metadata]

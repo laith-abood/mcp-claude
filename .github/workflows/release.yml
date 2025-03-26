@@ -24,6 +24,15 @@ jobs:
           HASH=$(git rev-list --tags --max-count=1 || echo "HEAD~1")
           echo "hash=${HASH}" >> $GITHUB_OUTPUT
           echo "Using last release hash: ${HASH}"
+      
+      - name: Create notes
+        run: |
+          HASH="${{ steps.last-release.outputs.hash }}"
+          echo "Using HASH: $HASH"
+          uv run --script scripts/release.py generate-notes --directory src/ $HASH > RELEASE_NOTES.md
+          cat RELEASE_NOTES.md
+        env:
+          UV_CACHE_DIR: ${{ runner.temp }}/setup-uv-cache
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
